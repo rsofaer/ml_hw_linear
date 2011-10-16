@@ -1,0 +1,52 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; skeleton code for linear classifier
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; load linear algebra library for linear system solving 
+(libload "libnum/linalgebra")
+
+;; load dataset class and dataset reding functions
+(libload "dataset")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; reading the database
+
+(de read-data ()
+  ;; create new dataset object
+  (setq data (new dataset))
+
+  ;; neutrino dataset
+  ;; (==> data read-neutrino "../datasets/uci-neutrinos/MiniBooNE_PID.txt")
+  ;; spam detection dataset
+  (==> data read-spambase "../datasets/uci-spambase/spambase.data")
+  ;; house vote dataset
+  ;; (==> data read-housevotes "../datasets/uci-housevotes/house-votes-84.data")
+  ;; wisconsin breast cancer dataset
+  ;; (==> data read-breastcancer "../datasets/uci-breastcancer/breast-cancer-wisconsin.data")
+  ;; pima indian diabetes dataset
+  ;; (==> data read-pimaindians "../datasets/uci-pima-indians/pima-indians-diabetes.data")
+  ;; ionosphere data
+  ;; (==> data read-ionosphere  "../datasets/uci-ionosphere/ionosphere.data")
+
+  (printf "total number of samples: %d\n" (==> data size))
+  (printf "number of input variables: %d\n" (==> data nvariables))
+
+  (printf "shuffling the samples, so they are in a random order\n")
+  (==> data shuffle)
+
+  (printf "normalizing variables to zero mean and unit variance\n")
+  (==> data normalize)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; read data
+(read-data)
+
+;; set sizes of the training set and test set
+(==> data set-train-test 200 150)
+
+
+(load "perceptron.lsh")
+(setq ps (new perceptron-solver data))

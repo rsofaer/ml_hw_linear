@@ -1,0 +1,257 @@
+
+#? * dataset
+;; a simple class to handle datasets.
+;; The input vectors, desired outputs for
+;; the training set and the test set are contained
+;; in the following slots:
+;;{<pre>
+;;  inputs-train: training samples
+;;  outputs-train: desired output for training samples
+;;  inputs-test: test samples
+;;  outputs-test: desired output for test samples
+;;</pre>}
+;; Example of use:
+;;{<code>
+;;  (setq z (new dataset))
+;;  (==> z read-ldat "mydataset.ldat")
+;;  (==> z normalize)
+;;  (==> z shuffle)
+;;  (==> z set-train-test 1000 500)
+;;  (==> my-learning-machine train :z:inputs-train :z:outputs-train)
+;;  (==> my-learning-machine test :z:inputs-test :z:outputs-test)
+;;</code>}
+(defclass dataset object
+  inputs				; PxN matrix of training samples
+  outputs				; P vector of desired outputs
+  inputs-train				; training samples
+  outputs-train				; desired output for training samples
+  inputs-test				; test samples
+  outputs-test				; desired output for test samples
+  )
+
+#? (==> <dataset> read-ldat <file> <shuffle> <split>)
+;; read a data file in ldat format: a list of lists
+;; with one list of numbers for each sample.
+;; The desired output is assumed to
+;; be the last item in each entry.
+;; <file> is the file to read the data from.
+;; <shuffle>: if non-nil the samples will be shuffled into a random order.
+;; <split> is the proportion of samples to be
+;; used for training (must be between 0 and 1). 
+;; the rest will be used for testing.
+;; example:
+;;{<code>
+;;  (==> mydataset read-ldat "myfile.ldat" t 0.7)
+;;</code>}
+(defmethod dataset read-ldat (file)
+  (let* ((raw (reading file (read)))
+	 (p (length raw))
+	 (n (- (length (car raw)) 1)))
+    (setq inputs (matrix p n))
+    (setq outputs (matrix p))
+    (idx-bloop ((input inputs) (output outputs))
+      (input () (nfirst n (car raw)))
+      (output (if (= 0 (last (car raw))) -1 1))
+      (setq raw (cdr raw)))) )
+
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-housevotes "../datasets/uci-housevotes/house-votes-84.data")
+(defmethod dataset read-housevotes (file)
+  (printf "reading UCI House votes dataset\n")
+  (let* ((translate-yn 
+	  (lambda (x) 
+	    (selectq x ("n" -1) ("y" 1) ("?" 0) 
+		     (t (error "unrecognized value")))))
+	 (d (read-lines file))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 1)))
+    (setq inputs (matrix nlin ncol))
+    (setq outputs (matrix nlin))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (regex-split "[^,]+" (car d))))
+	(output (if (= (car z) "democrat") 1 -1))
+	(input () (mapcar translate-yn (cdr z))))
+      (setq d (cdr d)))) )
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-ionosphere "../datasets/uci-ionosphere/ionosphere.data")
+(defmethod dataset read-ionosphere (file)
+  (printf "reading UCI Ionosphere dataset\n")
+  (let* ((d (read-lines file))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 1)))
+    (setq inputs (matrix nlin ncol))
+    (setq outputs (matrix nlin))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (reverse (regex-split "[^,]+" (car d)))))
+	(output (if (= (car z) "g") -1 1))
+	(input () (mapcar val (cdr z))))
+      (setq d (cdr d)))) )
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-spambase "../datasets/uci-spambase/spambase.data")
+(defmethod dataset read-spambase (file)
+  (printf "reading UCI Spambase dataset\n")
+  (let* ((d (read-lines file))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 1)))
+    (setq inputs (matrix nlin ncol))
+    (setq outputs (matrix nlin))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (reverse (regex-split "[^,]+" (car d)))))
+	(output (if (= (car z) "1") 1 -1))
+	(input () (mapcar val (cdr z))))
+      (setq d (cdr d)))) )
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-pimaindians "../datasets/uci-pima-indinas/pima-indinas-diabetes.data")
+(defmethod dataset read-pimaindians (file)
+  (printf "reading UCI Pima Indians Diabetes dataset\n")
+  (let* ((d (read-lines file))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 1)))
+    (setq inputs (matrix nlin ncol))
+    (setq outputs (matrix nlin))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (reverse (regex-split "[^,]+" (car d)))))
+	(output (if (= (car z) "1") 1 -1))
+	(input () (mapcar val (cdr z))))
+      (setq d (cdr d)))) )
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-breastcancer "../datasets/uci-breastcancer/breast-cancer-wisconsin.data")
+;; CAUTION: missing values are set to 5
+(defmethod dataset read-breastcancer (file)
+  (printf "reading UCI Breast Cancer Wisconsin dataset\n")
+  (let* ((decode (lambda (x) (if (= "?" x) 5 (val x))))
+	 (d (read-lines file))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 2)))
+    (setq inputs (matrix nlin ncol))
+    (setq outputs (matrix nlin))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (reverse (cdr (regex-split "[^,]+" (car d))))))
+	(output (if (= (car z) "4") 1 -1))
+	(input () (mapcar decode (cdr z))))
+      (setq d (cdr d)))))
+
+;; usage:
+;; (setq data (new dataset))
+;; (==> data read-neutrino "../datasets/uci-neutrinos/MiniBooNE_PID.txt")
+(defmethod dataset read-neutrino (file)
+  (printf "reading UCI MiniBooNE_PID neutrino dataset\n")
+  (reading file
+    (let* ((npos (read))
+	   (nneg (read))
+	   (i 0))
+      (setq inputs (matrix (+ npos nneg) 50))
+      (setq outputs (matrix (+ npos nneg)))
+      (repeat npos
+	(for (j 0 49) (inputs i j (read)))
+	(outputs i 1)
+	(incr i))
+      (repeat nneg
+	(for (j 0 49) (inputs i j (read)))
+	(outputs i -1)
+	(incr i)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? (==> <dataset> shuffle)
+;; shuffle all the examples, so they are in a random order.
+;; It is important to shuffle the samples when using stochastic
+;; (on-line) algorithms. there is no need to re-split the data
+;; after this.
+(defmethod dataset shuffle ()
+  (let ((p (idx-dim inputs 0)))
+    ;; sweep over all samples
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((k (int (rand 0 p)))	; select a random sample to be swapped
+	     (input2 (select inputs 0 k))
+	     (output2 (select outputs 0 k)))
+	;; swap current sample with randomly chosen one
+	(let ((z (idx-copy input2))) (idx-copy input input2) (idx-copy z input))
+	(let ((z (idx-copy output2))) (idx-copy output output2) (idx-copy z output))))) ())
+
+#? (==> <dataset> normalize)
+;; Make every input variable have zero mean and unit variance.
+;; Gradient-based algorithms require this, as they converge 
+;; much slower with data that is not centered and normalize.
+(defmethod dataset normalize ()
+  (let* ((p (idx-dim inputs 0))
+	 (n (idx-dim inputs 1))
+	 (m (matrix n))
+	 (v (matrix n)))
+    ;; compute means
+    (idx-eloop ((m m) (s inputs))
+      (m (/ ((idx-sum s)) p)))
+    ;; subtract means
+    (idx-eloop ((m m) (s inputs))
+      (idx-bloop ((s s)) (s (- (s) (m)))))
+    ;; compute standard deviations
+    (idx-eloop ((v v) (s inputs))
+      (v (sqrt (/ ((idx-sumsqr s)) p))))
+    ;; normalize variance
+    (idx-eloop ((vv v) (s inputs))
+      (idx-bloop ((ss s)) 
+	(when (<> 0 (vv)) (ss (/ (ss) (vv))))))
+    ;; return means and variances
+    (list m v)))
+
+#? (==> <dataset> set-train-test <ntrain> <ntest>)
+;; set the size of the training set to <train> and
+;; the size of the test set to <ntest>
+(defmethod dataset set-train-test (ntrain ntest)
+  (let ((total (idx-dim inputs 0)))
+    (when (> (+ ntrain ntest) total)
+      (error "training set and test set sizes are too large"))
+    ;; take first ntrain samples as training
+    (setq inputs-train (narrow inputs 0 ntrain 0))
+    (setq outputs-train (narrow outputs 0 ntrain 0))
+    ;; take the last ntest samples as testing
+    (setq inputs-test (narrow inputs 0 ntest (- total ntest)))
+    (setq outputs-test (narrow outputs 0 ntest (- total ntest)))
+    ntrain))
+
+#? (==> <dataset> split <s>)
+;; split set into training set and test set
+;; <s> is the proportion of samples used for training.
+;; the rest will be used for testing.
+;; <s> must be between 0 and 1 (0 and 1 not included).
+;; example: 
+;;{<code>
+;;  (==> mydataset split 0.7)
+;;</code>}
+(defmethod dataset split (s)
+  (when (or (>= s 1) (<= s 0)) 
+    (error "training/test split proportion must be between 0 and 1 not included"))
+  (let* ((total (idx-dim inputs 0))
+	 (ntrain (max 1 (int (* s total))))
+	 (ntest (- total ntrain)))
+    (==> this set-train-test ntrain ntest)))
+
+
+#? (==> <dataset> nvariables)
+;; return the number of input variables
+(defmethod dataset nvariables () (idx-dim inputs 1))
+
+#? (==> <dataset> size)
+;; return the total number of samples
+(defmethod dataset size () (idx-dim inputs 0))
+
+#? (==> <dataset> size-training)
+;; return the number of samples in the training set
+(defmethod dataset size-training () (idx-dim inputs-train 0))
+
+#? (==> <dataset> size-testing)
+;; return the number of samples in the test set
+(defmethod dataset size-testing () (idx-dim inputs-test 0))
+
+
+

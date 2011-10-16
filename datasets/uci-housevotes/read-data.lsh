@@ -1,0 +1,16 @@
+(de translate-yn (x)
+  (selectq x 
+    ("n" -1) ("y" 1) ("?" 0) 
+    (t (error "unrecognized value"))))
+
+(de read-data (f)
+  (let* ((d (read-lines f))
+	 (nlin (length d))
+	 (ncol (- (length (regex-split "[^,]+" (car d))) 1))
+	 (inputs (matrix nlin ncol))
+	 (outputs (matrix nlin)))
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((z (regex-split "[^,]+" (car d))))
+	(output (if (= (car z) "democrat") 1 -1))
+	(input () (mapcar translate-yn (cdr z)))))
+    (list inputs outputs)))
