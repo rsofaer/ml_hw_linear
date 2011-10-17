@@ -1,62 +1,23 @@
 ; Perceptron learning procedure code
-(libload "dataset.lsh")
-
+(libload "learner.lsh")
 
 #? * perceptron-solver
-(defclass perceptron-solver object
-  my-data ; dataset object
-  weights ; weight vector of the current best decision hyperplane
-  )
+(defclass perceptron-solver learner)
 
-(defmethod perceptron-solver run ()
-  (let ((iterations (==> this iterate-weights)))
-    (if (= iterations ())
-      (print "Perceptron learning procedure did not converge in 100000 iterations.")
-      (print (concat "Perceptron learning procedure complete after " (str iterations) " iterations.  Result:"))
-      (==> this print-error))
-  ))
-
-(defmethod perceptron-solver print-error ()
-  (print (concat "Training set error: " (str (==> this error :my-data:inputs-train :my-data:outputs-train))))
-  (print (concat "Training set loss: " (str (==> this error :my-data:inputs-train :my-data:outputs-train))))
-  (print (concat "Test set error: " (str (==> this error :my-data:inputs-test :my-data:outputs-test))))
-  (print (concat "Test set loss: " (str (==> this error :my-data:inputs-test :my-data:outputs-test)))))
-
-(defmethod perceptron-solver perceptron-solver (dataset)
-  (setq my-data dataset)
-  (setq weights (double-matrix (idx-dim :my-data:inputs-train 1))))
-
-(defmethod perceptron-solver error (input-matrix output-vector)
- (let ((sum 0))
-    (idx-bloop ((row input-matrix) (output output-vector))
-      (setq sum (+ sum (abs (- (output) (==> this threshold-f row))))))
-     (/ sum (idx-dim input-matrix 0))))
-
-(defmethod perceptron-solver loss (input-matrix output-vector)
-  (let ((sum 0))
-    (idx-bloop ((row input-matrix) (output output-vector))
-      (setq sum (+ sum (==> this per-sample-loss row output))))
-     sum))
+(defmethod perceptron-solver name () "Perceptron")
+(defmethod perceptron-solver perceptron-solver(dataset)
+  (==> this learner dataset))
 
 (defmethod perceptron-solver per-sample-loss (row output)
-  (/ (** (- (output) (==> this threshold-f row)) 2) 2))
+  (/ (square (- (output) (==> this threshold-f row))) 2))
 
-#? (==> <perceptron-solver> threshold-f <vector1>)
-;; Calculate the dot product of vector1 and weights
-;; Return 1 if the dot-product is > 0
-;; return -1 otherwise
-(defmethod perceptron-solver threshold-f (Xp)
-    (if (> ((idx-dot weights Xp)) 0)
-      1
-      -1))
-
-(defmethod perceptron-solver iterate-weights ()
+(defmethod perceptron-solver solve ()
   (let ((counter 0) (converged ())) 
     (while (and (< counter 100000) (not converged))
       (setq converged (==> this iterate-weights-once))
       (setq counter (+ counter 1)))
    (if converged counter ())))
-
+  
 (defmethod perceptron-solver iterate-weights-once ()
   (let ((converged t))
     (idx-bloop ((row :my-data:inputs-train) (output :my-data:outputs-train))
@@ -73,3 +34,5 @@
         ())
       t )))
           ;; map the row of the ouput and the weight to a new weight
+
+(de square(x) (* x x))

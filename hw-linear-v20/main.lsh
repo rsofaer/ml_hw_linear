@@ -40,13 +40,32 @@
   )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(de square(x) (* x x))
+(de scalar(x) ((double-matrix) x))
+(de identity-matrix(size) (let ((result (double-matrix size size)))
+  (for (i 0 (- size 1))
+    (result i i 1))
+  result))
 
 ;; read data
 (read-data)
 
 ;; set sizes of the training set and test set
-(==> data set-train-test 200 150)
+(==> data set-train-test 500 1500)
 
 
 (load "perceptron.lsh")
 (setq ps (new perceptron-solver data))
+;(==> ps run)
+
+(load "linear-gradient.lsh")
+(setq lin-stoch (new linear-gradient-solver data))
+(==> lin-stoch run)
+
+(load "linear-direct.lsh")
+(setq lin-d (new linear-direct-solver data))
+(==> lin-d run)
+
+(load "logistic-gradient.lsh")
+(setq log-stoch (new logistic-gradient-solver data))
+(==> log-stoch run)

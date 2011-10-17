@@ -1,0 +1,25 @@
+; Perceptron learning procedure code
+(libload "learner.lsh")
+
+#? * logistic-gradient-solver
+(defclass logistic-gradient-solver learner)
+(defmethod logistic-gradient-solver name() "Logistic Regression: Stochastic Gradient Descent")
+
+(defmethod logistic-gradient-solver logistic-gradient-solver (dataset)
+  (==> this learner dataset))
+
+#? Logistic loss for a sample.  (==> <obj> per-sample-loss input output)
+(defmethod logistic-gradient-solver per-sample-loss (input output)
+  (* (log (+ 1 (exp ((idx-mul [@ -1] (idx-mul output (idx-dot weights input)))))))))
+
+(defmethod logistic-gradient-solver solve()
+   (==> this solve-by-gradient-descent))
+  
+(defmethod logistic-gradient-solver gradient (input output)
+  (idx-dotm0 input (scalar (- (output) (tanh ((idx-dot weights input)))))))
+
+(de square (x)
+  (* x x))
+
+(defmethod logistic-gradient-solver step-size (iteration-number)
+  [@ .000007])

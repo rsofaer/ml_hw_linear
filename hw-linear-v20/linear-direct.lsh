@@ -1,0 +1,30 @@
+; Perceptron learning procedure code
+(libload "learner.lsh")
+
+#? * linear-direct-solver
+(defclass linear-direct-solver learner)
+(defmethod linear-direct-solver name() "Linear Regression: Direct Solution")
+
+(defmethod linear-direct-solver linear-direct-solver (dataset)
+  (==> this learner dataset))
+
+#? Mean Square loss for a sample.  (==> <obj> per-sample-loss input output)
+(defmethod linear-direct-solver per-sample-loss (row output)
+  (/ (square ((idx-sub output (idx-dot weights row)))) 2))
+
+;; Solve 
+(defmethod linear-direct-solver solve()
+  (let ((a (==> this covariance-matrix :my-data:inputs-train)) 
+        (b (double-matrix (idx-dim :my-data:inputs-train 1))))
+    (idx-bloop ((input :my-data:inputs-train) (output :my-data:outputs-train)) 
+      (setq b (idx-add b (idx-dotm0 input output))))
+    (setq weights (solve-sv a b))))
+
+(defmethod linear-direct-solver covariance-matrix(input-matrix)
+  (idx-add (idx-dotm0 (m*m (transpose input-matrix) input-matrix) (scalar (/ (idx-dim input-matrix 0))))
+           (idx-dotm0 (identity-matrix (idx-dim input-matrix 1)) l2-regularizer-c )))
+
+(defmethod linear-direct-solver run()
+    (==> this solve)
+    (print (concat (==> this name) " learning procedure complete. Result:"))
+    (==> this print-error))

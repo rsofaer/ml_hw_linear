@@ -1,0 +1,26 @@
+; Perceptron learning procedure code
+(libload "learner.lsh")
+
+#? * linear-gradient-solver
+(defclass linear-gradient-solver learner)
+(defmethod linear-gradient-solver name() "Linear Regression: Stochastic Gradient Descent")
+
+(defmethod linear-gradient-solver linear-gradient-solver (dataset)
+  (==> this learner dataset))
+
+#? Mean Square loss for a sample.  (==> <obj> per-sample-loss input output)
+(defmethod linear-gradient-solver per-sample-loss (row output)
+  (/ (square ((idx-sub output (idx-dot weights row)))) 2))
+
+(defmethod linear-gradient-solver solve()
+  (==> this solve-by-gradient-descent))
+  
+;; (Yi-W*Xi)*Xi
+(defmethod linear-gradient-solver gradient (input output)
+  (idx-dotm0 input (idx-sub output (idx-dot weights input))))
+
+(de square (x)
+  (* x x))
+
+(defmethod linear-gradient-solver step-size (iteration-number)
+  [@ .00001])
