@@ -19,8 +19,3 @@
 (defmethod linear-gradient-solver gradient (input output)
   (idx-dotm0 input (idx-sub output (idx-dot weights input))))
 
-(de square (x)
-  (* x x))
-
-(defmethod linear-gradient-solver step-size (iteration-number)
-  [@ .00001])

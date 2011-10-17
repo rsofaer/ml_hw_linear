@@ -51,21 +51,48 @@
 (read-data)
 
 ;; set sizes of the training set and test set
-(==> data set-train-test 500 1500)
+(==> data set-train-test 400 1000)
+
+(libload "perceptron.lsh")
+(libload "linear-gradient.lsh")
+(libload "linear-direct.lsh")
+(libload "logistic-gradient.lsh")
 
 
-(load "perceptron.lsh")
 (setq ps (new perceptron-solver data))
-;(==> ps run)
+(==> ps run)
 
-(load "linear-gradient.lsh")
 (setq lin-stoch (new linear-gradient-solver data))
 (==> lin-stoch run)
 
-(load "linear-direct.lsh")
 (setq lin-d (new linear-direct-solver data))
 (==> lin-d run)
 
-(load "logistic-gradient.lsh")
 (setq log-stoch (new logistic-gradient-solver data))
 (==> log-stoch run)
+
+(setq training-sizes '(10 30 100 200))
+(setq l2-values '([@ 0] [@ 100] [@ 1000] [@ 10000])) ; 100 consistently did better 
+                                                    ; than any lower number
+(each ((s training-sizes))
+  (print "")
+  (print (concat "Working with training set size " (str s)))
+  (==> data set-train-test s 1000)
+  (each ((i l2-values))
+    (print (concat "Trying l2 regularization " (str (i))))
+    (setq log-stoch (new logistic-gradient-solver data))
+    (setq :log-stoch:l2-regularizer-c i)
+    (==> log-stoch run)))
+
+
+;(setq training-sizes '(10 30 100 200))
+;(setq l1-values '([@ 0] [@ 1] [@ 100] [@ 1000] )) ; 100 consistently did better 
+;(each ((s training-sizes))
+;  (print "")
+;  (print (concat "Working with training set size " (str s)))
+;  (==> data set-train-test s 1000)
+;  (each ((i l1-values))
+;    (print (concat "Trying l1 regularization " (str (i))))
+;    (setq log-stoch (new logistic-gradient-solver data))
+;    (setq :log-stoch:l1-regularizer-c i)
+;    (==> log-stoch run)))

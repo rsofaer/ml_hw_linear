@@ -6,33 +6,18 @@
 
 (defmethod perceptron-solver name () "Perceptron")
 (defmethod perceptron-solver perceptron-solver(dataset)
-  (==> this learner dataset))
+  (==> this learner dataset)
+  (setq l2-regularizer-c [@ 0]))
 
 (defmethod perceptron-solver per-sample-loss (row output)
-  (/ (square (- (output) (==> this threshold-f row))) 2))
+  ((idx-mul (scalar (- (==> this threshold-f row) (output))) (idx-dot weights row))))
 
 (defmethod perceptron-solver solve ()
-  (let ((counter 0) (converged ())) 
-    (while (and (< counter 100000) (not converged))
-      (setq converged (==> this iterate-weights-once))
-      (setq counter (+ counter 1)))
-   (if converged counter ())))
-  
-(defmethod perceptron-solver iterate-weights-once ()
-  (let ((converged t))
-    (idx-bloop ((row :my-data:inputs-train) (output :my-data:outputs-train))
-      (setq converged
-        (and converged (==> this iterate-weights-for-row row output))))
-    converged))
+  (==> this solve-by-gradient-descent))
 
-(defmethod perceptron-solver iterate-weights-for-row (row output)
-  (let ((z (- (output) (==> this threshold-f row))))
-    (if (<> z 0)
-     (for (i 0 (- (idx-dim :my-data:inputs 1) 1))
-       (weights i                          ;; set the ith element of weights 
-          (+ (weights i) (* z (row i))));; to Wi + (Yp - f(W,Xp))Xp
-        ())
-      t )))
-          ;; map the row of the ouput and the weight to a new weight
+(defmethod perceptron-solver gradient (input output)
+  (idx-dotm0 input (idx-sub output (scalar (==> this threshold-f row)))))
 
-(de square(x) (* x x))
+(defmethod perceptron-solver step-size (iteration-number)
+  (let ((c1 4000)(c2 5000))
+    (scalar (/ c1 (+ c2 iteration-number)))))

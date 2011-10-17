@@ -6,14 +6,17 @@
   iteration-limit;
   l1-regularizer-c;
   l2-regularizer-c;
+  precision;
   )
 
 (defmethod learner learner (dataset)
   (setq my-data dataset)
   (setq weights (double-matrix (idx-dim :my-data:inputs-train 1)))
-  (setq iteration-limit 10000)
+  (setq weights (idx-copy (select :data:inputs-train 0 (rand 0 (idx-dim :data:outputs-train 0)))))
+  (setq iteration-limit 100000000)
+  (setq precision 0.000001)
   (setq l1-regularizer-c [@ 0])
-  (setq l2-regularizer-c [@ .00001]))
+  (setq l2-regularizer-c [@ 1000]))
 
   (defmethod learner name () "Abstract")
 
@@ -50,9 +53,11 @@
   (let ((sum 0))
     (idx-bloop ((row input-matrix) (output output-vector))
       (setq sum (+ sum (==> this per-sample-loss row output))))
-     (+ (/ sum (idx-dim output-vector 0))
+     (+ 
+        (/ sum (idx-dim output-vector 0))
         ((==> this l1-regularizer))
-        ((==> this l2-regularizer)))))
+        ((==> this l2-regularizer)))
+        ))
 
 (defmethod learner test-loss ()
   (==> this loss :my-data:inputs-test :my-data:outputs-test))
@@ -62,10 +67,10 @@
 
 (defmethod learner solve-by-gradient-descent()
   (let ((counter 0) (converged ())) 
-    (while (and (< counter iteration-limit) (not converged))
+    (while (and (< counter (==> this full-iteration-limit)) (not converged))
       (setq converged (==> this iterate-weights-once (==> this step-size counter)))
       (setq counter (+ counter 1)))
-    (if converged counter ())));; If converged, return counter, else return empty
+    (if converged (* counter (idx-dim :my-data:outputs-train 0)) () )));; If converged, return counter, else return ()
 
 (defmethod learner iterate-weights-once (step-size)
     (let ((converged t))
@@ -76,17 +81,32 @@
 
 ;; W(t+1) = W(t) + eta(t)(-1*gradient)
 (defmethod learner iterate-weights-for-row (row output step-size)
-  (let* ((weight-increment (idx-dotm0 (==> this gradient row output) step-size))
-         (old-loss (==> this test-loss)))
-    ;(setq weights (idx-sub weights (idx-dotm0 weights (idx-sub [@ 1] (idx-mul step-size l2-regularizer-c))))); l2 Regularization
+  (let* ((weight-increment (idx-dotm0 (==> this gradient row output) step-size)))
+    (==> this l2-weight-decay step-size)
+    (==> this l1-weight-decay step-size)
     (setq weights (idx-add weights weight-increment))
-    (==> this converged? old-loss)))
+    (==> this converged? weight-increment)))
 
-(defmethod learner converged? (old-loss)
-    (print (- old-loss (==> this train-loss)))
-  (< (- old-loss (==> this train-loss)) 0.001))
+(defmethod learner l2-weight-decay (step-size)
+  (setq weights 
+    (idx-dotm0 weights (idx-sub [@ 1] (idx-mul step-size l2-regularizer-c))))); l2 Regularization
+
+(defmethod learner l1-weight-decay (step-size)
+  (idx-bloop ((weight weights))
+    (weight ((idx-add weight (idx-mul step-size l1-regularizer-c))))))
+
+(defmethod learner converged? (weight-increment)
+  ;(if (> ((idx-sup weight-increment)) precision) (print (idx-sup weight-increment)))
+  (< ((idx-sup weight-increment)) precision))
 
 (defmethod learner l1-regularizer ()
   (idx-mul l1-regularizer-c (idx-sum weights)))
 (defmethod learner l2-regularizer ()
   (idx-mul (idx-mul l2-regularizer-c [@ .5]) (idx-sumsqr weights)))
+
+(defmethod learner step-size (iteration-number)
+  (let ((c1 .001)(c2 50))
+    (scalar (/ c1 (+ c2 iteration-number)))))
+
+(defmethod learner full-iteration-limit ()
+  (/ iteration-limit (idx-dim :my-data:outputs-train 0)))

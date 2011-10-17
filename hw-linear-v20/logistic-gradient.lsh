@@ -17,9 +17,3 @@
   
 (defmethod logistic-gradient-solver gradient (input output)
   (idx-dotm0 input (scalar (- (output) (tanh ((idx-dot weights input)))))))
-
-(de square (x)
-  (* x x))
-
-(defmethod logistic-gradient-solver step-size (iteration-number)
-  [@ .000007])
