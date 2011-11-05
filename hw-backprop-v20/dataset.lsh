@@ -1,0 +1,252 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; dataset.lsh
+;; Yann LeCun, March 2004
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? ** dataset
+;; a simple class to handle datasets.
+;; The input vectors, desired outputs for
+;; the training set and the test set are contained
+;; in the following slots:
+;; inputs: a vector/matrix/array/tensor of samples (can be any type).
+;; outputs: a vector/matrix/array/tensor of desired outputs (can be any type).
+;; Most commonly the inputs and outputs slots are 2D matrices of floats.
+;; Example of use:
+;;{<code>
+;;  (setq z (new dataset))
+;;  (==> z read-ldat "mydataset.ldat" t)
+;;  (==> my-learning-machine train :z:inputs :z:outputs)
+;;</code>}
+(defclass dataset object
+  inputs				; PxN matrix of training samples
+  outputs				; PxM vector of desired outputs
+  )
+
+#? (new dataset)
+;; create and return a new empty dataset object.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; utilities
+
+#? (==> <dataset> nvariables)
+;; return the number of input variables
+(defmethod dataset nvariables () (idx-dim inputs 1))
+
+#? (==> <dataset> noutputs)
+;; return the number of input variables
+(defmethod dataset noutputs () (idx-dim outputs 1))
+
+#? (==> <dataset> size)
+;; return the total number of samples
+(defmethod dataset size () (idx-dim inputs 0))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; reading/writing
+
+#? (==> <dataset> load <file> <shuffle>)
+;; read a data file in the Lush binary object format.
+;; <file> is a Lush file containing the data.
+;; <shuffle>: if non-nil the samples will be shuffled into a random order.
+;; example:
+;;{<code>
+;;  (setq mydataset (new dataset))
+;;  (==> mydataset load "myfile.bin" t)
+;;</code>}
+(defmethod dataset load (file shuffle)
+  (reading file
+    (setq inputs (bread))
+    (setq output (bread)))
+  (when shuffle (==> this shuffle))
+  ())
+
+#? (==> <dataset> save <file>)
+;; save the data in the dataset into Lush matrix files.
+;; <file-in> is a Lush matrix file that will contain the input samples
+;; <file-out> is a lush matrix file that will contain the corresponding labels.
+(defmethod dataset save (file)
+  (writing file
+    (bwrite inputs)
+    (bwrite outputs)))
+
+#? (==> <dataset> load-matrix <file-in> <file-out> <shuffle>)
+;; read a data file in the Lush matrix format.
+;; <file-in> is a Lush matrix file containing the input samples
+;; <file-out> is a lush matrix file containing the corresponding labels.
+;; <shuffle>: if non-nil the samples will be shuffled into a random order.
+;; example:
+;;{<code>
+;;  (setq mydataset (new dataset))
+;;  (==> mydataset load "myfile.mat" "myfile-labels.mat" t)
+;;</code>}
+(defmethod dataset load-matrix (file-in file-out shuffle)
+  (setq inputs (load-matrix file-in))
+  (setq outputs (load-matrix file-out))
+  (when shuffle (==> this shuffle))
+  ())
+
+#? (==> <dataset> save-matrix <file-in> <file-out>)
+;; save the data in the dataset into Lush matrix files.
+;; <file-in> is a Lush matrix file that will contain the input samples
+;; <file-out> is a lush matrix file that will contain the corresponding labels.
+(defmethod dataset save-matrix (file-in file-out)
+  (save-matrix inputs file-in)
+  (save-matrix outputs file-out))
+
+
+#? (==> <dataset> read-ldat <file> <shuffle>)
+;; read a data file in ldat format: a list of lists
+;; with one list of numbers for each sample.
+;; The desired output is assumed to
+;; be the last item in each entry.
+;; <file> is the file to read the data from.
+;; <shuffle>: if non-nil the samples will be shuffled into a random order.
+;; <split> is the proportion of samples to be
+;; used for training (must be between 0 and 1). 
+;; the rest will be used for testing.
+;; example:
+;;{<code>
+;;  (setq mydataset (new dataset))
+;;  (==> mydataset read-ldat "myfile.ldat" t)
+;;</code>}
+(defmethod dataset read-ldat (file shuffle)
+  (let* ((raw (reading file (read)))
+	 (p (length raw))
+	 (n (- (length (car raw)) 1)))
+    (setq inputs (float-matrix p n))
+    (setq outputs (float-matrix p 1))
+    (idx-bloop ((input inputs) (output outputs))
+      (input () (nfirst n (car raw)))
+      (output 0 (last (car raw)))
+      (setq raw (cdr raw))))
+  (when shuffle (==> this shuffle)))
+
+
+#? (==> <dataset> read-csv-data <file> <shuffle>)
+;; read a data file in UCI machine learning Repository ASCII 
+;; data format. Each line in such a file contains a training sample
+;; as a list of comma-separated input variables, and the category
+;; label (an integer) at the end of the line.
+;; <file> is the file to read the data from.
+;; <shuffle>: if non-nil the samples will be shuffled into a random order.
+;; The labels are internally modified so that their range is
+;; [0, number-of-categories-1], instead of the original [1, number-of-categories].
+;;
+;; example:
+;;{<code>
+;;  (setq mydataset (new dataset))
+;;  (==> mydataset read-csv-data "myfile.data" t)
+;;</code>}
+(defmethod dataset read-csv-data (file shuffle)
+  (let* ((raw ()) (i 0))
+    (reading file
+      (while (<> (skip-char "\n\r\f") "\e")
+        (setq raw (cons (all ((x (regex-split "[^,]+" (read-string)))) (val x)) raw))
+	(incr i)
+	(when (= 0 (mod i 100)) (printf "%d " i) (flush))))
+    (let* ((p (length raw))
+	   (n (- (length (car raw)) 1))
+	   (i p))
+      (setq inputs (float-matrix p n))
+      (setq outputs (float-matrix p 1))
+      (while raw
+	(incr i -1)
+	(inputs i () (nfirst n (car raw)))
+	(outputs i 0 (- (last (car raw)) 1))
+	(setq raw (cdr raw)))))
+  (when shuffle (==> this shuffle)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; preparation, preprocessing: shuffling, normalization
+
+#? (==> <dataset> shuffle)
+;; shuffle all the examples.
+;; there is no need to re-split after this.
+(defmethod dataset shuffle ()
+  (let ((p (idx-dim inputs 0)))
+    ;; sweep over all samples
+    (idx-bloop ((input inputs) (output outputs))
+      (let* ((k (int (rand 0 p)))	; select a random sample to be swapped
+	     (input2 (select inputs 0 k))
+	     (output2 (select outputs 0 k)))
+	;; swap current sample with randomly chosen one
+	(let ((z (idx-copy input2))) (idx-copy input input2) (idx-copy z input))
+	(let ((z (idx-copy output2))) (idx-copy output output2) (idx-copy z output))))) ())
+
+#? (==> <dataset> normalize)
+;; Make every input variable have zero mean
+;; and unit variance.
+(defmethod dataset normalize ()
+  (let* ((p (idx-dim inputs 0))
+	 (n (idx-dim inputs 1))
+	 (m (matrix n))
+	 (v (matrix n)))
+    ;; compute means
+    (idx-eloop ((m m) (s inputs))
+      (m (/ ((idx-sum s)) p)))
+    ;; subtract means
+    (idx-eloop ((m m) (s inputs))
+      (idx-bloop ((s s)) (s (- (s) (m)))))
+    ;; compute standard deviations
+    (idx-eloop ((v v) (s inputs))
+      (v (sqrt (/ ((idx-sumsqr s)) p))))
+    ;; normalize variance
+    (idx-eloop ((v v) (s inputs))
+      (idx-bloop ((s s)) (s (/ (s) (v)))))
+    ;; return means and variances
+    (list m v)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; splitting and slicing
+
+#? (==> <dataset> narrow <n> <offset>)
+;; create and return a new dataset that is a subset
+;; of samples from the current dataset.
+;; The new dataset has <n> samples starting
+;; at <offset>. This is a low level function
+;; called by dataset splitting functions.
+(defmethod dataset narrow (n offset)
+  (let ((d (new dataset)))
+    (setq :d:inputs (narrow inputs 0 n offset))
+    (setq :d:outputs (narrow outputs 0 n offset))
+    d))
+
+#? (==> <dataset> firstn <n>)
+;; return a new dataset with the first 
+;; n elements of this dataset
+(defmethod dataset firstn (n)
+  (let ((d (new dataset)))
+    (setq :d:inputs (narrow inputs 0 n 0))
+    (setq :d:outputs (narrow outputs 0 n 0))
+    d))
+
+#? (==> <dataset> lastn <n>)
+;; return a new dataset with the last n 
+;; elements of this dataset
+(defmethod dataset lastn (n)
+  (let ((d (new dataset))
+	(s (==> this size)))
+    (setq :d:inputs (narrow inputs 0 n (- s n)))
+    (setq :d:outputs (narrow outputs 0 n (- s n)))
+    d))
+
+#? (==> <dataset> split <s>)
+;; split set into two disjoint datasets where the first
+;; set has <s> times the total numebr of samples and
+;; the second dataset has the remaining samples.
+;; The two newly created datasets are returned in a list.
+(defmethod dataset split (s)
+  (let ((d1 (new dataset))
+	(d2 (new dataset)))
+    (when (or (>= s 1) (<= s 0)) 
+      (error "split proportion must be between 0 and 1 not included"))
+    (let* ((total (idx-dim inputs 0))
+	   (n1 (max 1 (int (* s total))))
+	   (n2 (- total ntrain)))
+      (setq :d1:inputs (narrow inputs 0 n1 0))
+      (setq :d1:outputs (narrow outputs 0 n1 0))
+      ;; take the last ntest samples as testing
+      (setq :d2:inputs (narrow inputs 0 ntest (- total ntest)))
+      (setq :d2:outputs (narrow outputs 0 ntest (- total ntest))))
+    (list d1 d2)))
+
+

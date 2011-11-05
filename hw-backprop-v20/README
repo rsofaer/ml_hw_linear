@@ -1,0 +1,176 @@
+Backpropagation and multi-module gradient-based learning.
+Yann LeCun
+
+The purpose of this assignment is to implement and experiment
+with multi-module gradient-based learning and backpropagation.
+
+Your assignment should be sent by email to the TA
+- Send your email in plain text (no msword, no html, no postscript, no pdf).
+- you must implement the code by yourself, but you are 
+  encouraged to discuss your results with other students.
+- Include your source code, zipped or tar'd, as an attachment.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+A NOTE ABOUT DEBUGGING LUSH PROGRAMS:
+Lush being an interpreter, it is its own debugger.
+You can put break points anywhere in the code
+by inserting the following expression:
+  (pause "some message") 
+When the expression is encountered, the execution will stop, 
+and Lush will give you a prompt (after printing the message 
+in the double quote). At this point, you can type any Lush 
+expression, which allows you to examine or modify the value 
+of any variable, call any function, or even modify functions 
+on the fly. To print the sequence of calls that lead to the current
+point, type (where). To resume execution, simply hit CTRL-D.
+You can also get a debug prompt by hitting CTRL-C
+at any time during execution.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+The RUNME executable Lush script displays the online
+documentation of the code provided. the functions you
+are supposed to implement are documented, but not implemented
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+You must implement various modules and learning machine
+architectures and train them on the dataset provided
+in this directory.
+
+Much of the code is implemented and provided in Lush.
+You merely have to fill in the code in the class
+templates in the file "modules.lsh" 
+
+You must also modify "main.lsh" to run the experiments and get 
+the results. The places where you must insert your code are
+indicated by the following line in modules.lsh:
+  (error "you have to write this code")
+All of the material has been discussed in class, and
+much of the necessary information is available in the 
+slides on the class website.
+
+A working code example is provided that trains a single layer
+neural net and a 2-layer neural net on the dataset.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+PART 1:  Implement the necessary modules.
+         (modify modules.lsh)
+
+For each module, you must implement the fprop and bprop methods
+
+1.1: Implement the softmax module. 
+  The softmax module has one vector inputs and one vector output
+  of the same size. Each output Qi is defined as:
+  Qi = exp(-beta*Xi) / SUM_j exp(-beta*Xj)
+
+1.2: Implement the cross-entropy loss function module The
+  cross-entropy module computes the Kullback-Leibler divergence (or
+  cross-entropy) between a desired (discrete) distribution P (stored
+  as a vector of positive numbers that sum to 1) and an actual
+  distribution Q: 
+    L = SUM_i P[i] log2(P[i]/Q[i]) where log2 is the 
+  log base 2, and L is measured in bits. 
+  (a Lush function log2 is provided for your convenience).
+
+1.3: Implement the rbf-module.
+   The tanh module has a vector input and a vector output.
+   The input-output function is:
+     Qi = 1/2 ||X - Wi||^2 
+   where Wi is the i-th row of a matrix of prototypes W.
+   The bprop method must compute gradients with respect to
+   the input and to the prototype vectors.
+
+
+EXTRA CREDIT:
+1.5: devise an automatic scheme for testing the correctness
+   of the bprop method of any module. Explain how it would work.
+
+1.6: implement the above scheme.
+
+________________________________________________________________
+PART 2: train a 2-layer neural net on the isolet dataset.
+
+  To complete this part you must make slight modifications 
+  to the functions train-isolet-1layer-cross-entropy
+  train-isolet-2layer-cross-entropy
+
+  The current code includes an working example of 1-layer
+  and 2-layer neural networks with the squared error loss 
+  (using the euclidean module as the loss function). 
+  The corresponding training scripts are 
+  train-isolet-1layer-mse, and train-isolet-2layer-mse
+  The 1-layer net contains the following sequence of modules:
+  (linear, bias, tanh), and the 2-layer version:
+  (linear, bias, tanh, linear, bias, tanh).
+
+  You must test a 2-layer neural network with the 
+  cross-entropy on top of a softmax module. In other word, 
+  your machine should be composed of the following modules: 
+  (linear, bias, tanh, linear, bias, softmax)
+  and the loss module should be the cross-entropy module.
+  compare the performance of this with a single layer logistic
+  regressor: (linear, bias, softmax) with cross-entropy loss
+    
+  The dataset is a spoken letter recognition dataset.
+  This is a relatively large set with over 600 input features
+  per sample, 26 categories, and over 6000 training samples. 
+  The dataset contains speech data from 150 subjects who spoke 
+  the name of each letter of the alphabet twice. Hence, there are
+  52 training examples from each speaker. The features include 
+  spectral coefficients (resulting from Fourier transform) as well
+  as other features (contour features, sonorant features, 
+  pre-sonorant features, and post-sonorant features).
+  The file isolet.readme provides additional information 
+  about the original data.
+
+  The data is provided in four files in Lush matrix format:
+  isolet-train.mat: training set input vectors 
+  isolet-train-labels.mat: training set labels (0..25)
+  isolet-test.mat: test set input vectors
+  isolet-test-labels.mat: test set labels (0..25)
+
+****************************
+3.1: train the architecture linear->bias->softmax with
+  cross-entropy loss on this set using 4000 training samples 
+  and 1000 test samples. Report the average loss and the error 
+  rate on the training set and the test set. Experiment 
+  to find a good learning rate and decay rate.
+
+3.2: train a 2-layer networks (with one hidden layer) 
+  containing 10,  20, 40, and 80 hidden units using 4000 
+  training samples and 1000 test samples. Find a good 
+  learning rate and decay rate (L2 regularization coefficient)
+  for each experiment. The architecture should be:
+  linear->bias->tanh->linear->bias->softmax with
+  cross-entropy loss.
+  For each network size report the loss and the error 
+  rate on the training set and the test set.
+  You should get less than 5% error on the test set
+  with an appropriately sized-network (which is better
+  than the results reported in the original paper
+  that used this data).
+  WARNING: a training run will take several minutes.
+
+4.: Calculate the number of parameters (weights and biases) 
+  for each of the machines you experimented with. Plot
+  the performance (test set error) of the machines with 
+  respect to number of parameters. You may use any
+  plotting tool you like; lush has a plotting facility
+  that can be used (see the graph-xy function).
+
+5.: Extra Credit:
+  See if you can get another architecture to do better, such as:
+  - a 3-layer neural net:
+   (linear, bias, tanh, linear, bias, tanh, linear, bias, softmax)
+  - a neural-net/RBF hybrid:
+   (linear, bias, tanh, rbf, bias, softmax)
+  - an SVM-like architecture:
+   (rbf, negexp, linear, biad, softmax)
+   where the negexp module has one input vector 
+   and one output vector of the same size
+   The input-output relation is: Q[i] = exp(-beta*X[i])
+   where beta is a constant.
+   The prototypes of the rbf-module should be initialized 
+   with randomly selected samples from the training set.
+  - some other combination of modules.
+

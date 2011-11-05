@@ -1,0 +1,2 @@
+(de scalar(x) ((double-matrix) x))
+(de square(x) (* x x))

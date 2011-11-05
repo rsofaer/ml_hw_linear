@@ -1,0 +1,146 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Modules
+
+(libload "numerical")
+(libload "state")
+(libload "modules-base")
+(libload "misc")
+
+#? ** Extra Trainable Modules
+;; These classes are trainable modules that can be 
+;; assembled to form complex learning machines
+;; that can be trained with a gradient-based algorithm.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * softmax module
+;; A module that transforms a vector
+;; of numbers into a vector of numbers between
+;; 0 and 1 that sum to 1 using the so-called 
+;; softmax transformation.
+(defclass softmax-module object
+  beta
+  ;; you might have to add slots here
+  )
+
+#? (new softmax-module <beta>)
+;; Create a new <softmax-module> with
+;; gain parameter <beta>
+(defmethod softmax-module softmax-module (b)
+  (setq beta b)
+  ;; you might have to add some code here
+  )
+
+(defmethod softmax-module beta-exp (x)
+  (exp (* -1 beta (x))))
+
+(defmethod sum-beta-exp (x)
+  (let ((sum 0))
+    (idx-bloop ((xk x))
+               (setq sum (+ sum (==> this beta-exp xk))))
+    sum))
+
+#? (==> <softmax-module> fprop <input> <output>)
+(defmethod softmax-module fprop (input output)
+    (==> output resize (idx-dim :output:x 0))
+    (idx-bloop ((xk :input:x) (outk :output:x))
+       (setq outk (/ (beta-exp xk) (sum-beta-exp :input:x)))))
+
+;; WTF  #? (==> <euclidean-module> bprop <input1> <input2> <output>)
+#? (==> <softmax-module> bprop <input> <output>)
+;; Calculate dE/dinput
+;; After running this:
+;; (:input:dx i j) is the derivative of (:output:x i)
+;; with respect to (:input:x j)
+(defmethod softmax-module bprop (input output)
+  (m*m :output:dx (==> this jacobian) :input:dx))
+
+(defmethod softmax-module jacobian ()
+  (let ((sum-exp (==> this sum-beta-exp :input:x)))
+     (idx-gloop ((indxv :input:dx) (outdxv :output:dx) (i))
+          (idx-gloop ((indx indxv) (outdx outdxv) (j))
+              (/ (- (* sum-exp (==> this d-beta-exp i j)) 
+                    (* (beta-exp i) beta -1 )) 
+                 (square sum-exp))
+                     ))))
+
+(defmethod softmax-module d-beta-exp (i j)
+  (if (= i j)
+    (* beta -1 (==> this beta-exp :input:i))
+    0))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * cross-entropy module
+;; A module that computes the Kullback-Leibler
+;; divergence or cross-entropy between a desired 
+;; (discrete) distribution Pi and an actual 
+;; distribution Qi:  L = SUM_i Pi log2(Pi/Qi)
+;; where log2 is the log base 2, and L is measured 
+;; in bits. 
+(defclass cross-entropy object)
+
+
+#? (==> <cross-entropy> fprop (q p l)
+;; compute the cross-entropy (orKL-divergence)
+;; between the desired distribution in vector <:p:x> 
+;; and the actual distribution in vector <:q:x>
+;; (both arguments are state objects).
+;; Put the resulting value in l (which is an idx0), 
+;; and return the value.
+(defmethod cross-entropy fprop (q p l)
+  (let ((s 0))
+    (idx-bloop ((qi :q:x) (pi :p:x)) 
+      (setq s (+ s (* (pi) (log2 (/ (pi) (qi)))))))
+    ((:l:x s))))
+
+#? (==> <cross-entropy> bprop (q p l)
+;; Compute the derivative of l
+;; with respect to :p:x and :q:x
+;; and put the resulting value in :p:dx
+;; and :q:dx
+(defmethod cross-entropy bprop (q p l)
+  (idx-bloop ((qi :q:x) (pi :p:x) (dqi :q:dx) (dpi :p:dx))
+     (setq dqi (/ -1 qi))
+     (setq dpi (+ qi (log2 (/ pi qi))))
+     ))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * RBF module
+;; A module that computes the vector of
+;; square euclidean distances between the 
+;; input and a set of prototypes
+(defclass rbf-module object
+  w
+  )
+
+#? (new rbf-module <p> <ninputs> <noutputs>)
+;; Create a new rbf module. <p> is the parameter object in 
+;; which the weight matrix will be allocated. <ninputs> is the 
+;; number of inputs and <noutputs> the number of outputs.
+(defmethod rbf-module rbf-module (p ninputs noutputs)
+  (setq w (alloc-state p (list noutputs ninputs))))
+
+#? (==> <rbf-module> fprop <input> <output>)
+;; Multiplies state <input> by the weight matrix of
+;; <rbf-module>, and writes the result into <output>.
+(defmethod rbf-module fprop (input output)
+  (==> output resize (idx-dim :w:x 0))
+  (error "you have to write this code")
+  ())
+
+#? (==> <rbf-module> bprop <input> <output>)
+;; Bakcpropagate gradients through the <rbf-module>
+(defmethod rbf-module bprop (input output)
+  (error "you have to write this code")
+  ())
+
+#? (==> <rbf-module> randomize <k>)
+;; initializes the weights to random values.
+;; drawn in the interval [-k/z, +k/z] where z
+;; is the square root of the number of inputs.
+;; This must be called before starting the training
+;; of multilayer systems that contain linear modules.
+(defmethod rbf-module randomize (k)
+  (let* ((fanin (idx-dim :w:x 1))
+	 (z (/ k (sqrt fanin))))
+    (idx-bloop ((x :w:x)) (idx-bloop ((x x)) (x (rand (- z) z))))) ())
+

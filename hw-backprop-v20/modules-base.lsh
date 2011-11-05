@@ -1,0 +1,209 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Basic Modules
+
+(libload "numerical")
+(libload "state")
+
+#? ** Basic Trainable Modules
+;; These classes are trainable modules that can be 
+;; assembled to form complex learning machines
+;; that can be trained with a gradient-based algorithm.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * euclidean-module
+;; A module with 2 inputs that computes
+;; 0.5 times the sum of square difference between
+;; the components of the inputs. The two inputs
+;; must be states of the same size.
+(defclass euclidean-module object)
+
+#? (new euclidean-module)
+;; Create a new <euclidean-module>.
+
+#? (==> <euclidean-module> fprop <input1> <input2> <output>)
+;; Computes 0.5 times the sum of square difference between
+;; the components of state <input1> and the components of
+;; state <input2>. Write the result into 0-dimensional state <output>.
+(defmethod euclidean-module fprop (input1 input2 output)
+  (idx-sqrdist :input1:x :input2:x :output:x)
+  (:output:x (* 0.5 (:output:x))) ())
+
+#? (==> <euclidean-module> bprop <input1> <input2> <output>)
+;; Back-propagates gradients through <euclidean-module>.
+;; This multiplies the gradient of some function with respect
+;; to <output> (stored in the <dx> slot of <output>) by the
+;; jacobian of the <euclidean-module> with respect to its inputs.
+;; The result is written into the <dx> slots of <input1> and
+;; <input2>.
+(defmethod euclidean-module bprop (input1 input2 output)
+  (idx-sub :input1:x :input2:x :input1:dx)
+  (idx-dotm0 :input1:dx :output:dx :input1:dx)
+  (idx-minus :input1:dx :input2:dx))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defclass switch object)
+
+(defmethod switch switch () ())
+
+(defmethod switch fprop (input1 input2 output)
+  (idx-copy (select :input1:x 0 (:input2 x 0)) :output:x) ())
+
+(defmethod switch bprop (input1 input2 output)
+  (idx-copy :output:dx (select :input1:dx 0 (:input2 x 0))) ())
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * linear-module
+;; a module that multiplies its input by a weight matrix.
+(defclass linear-module object 
+  w					; weight matrix (a state object)
+  )
+
+#? (new linear-module <p> <ninputs> <noutputs>)
+;; Create a new linear module. <p> is the parameter object in 
+;; which the weight matrix will be allocated. <ninputs> is the 
+;; number of inputs and <noutputs> the number of outputs.
+(defmethod linear-module linear-module (p ninputs noutputs)
+  (setq w (alloc-state p (list noutputs ninputs))))
+
+#? (==> <linear-module> fprop <input> <output>)
+;; Multiplies state <input> by the weight matrix of
+;; <linear-module>, and writes the result into <output>.
+(defmethod linear-module fprop (input output)
+  (==> output resize (idx-dim :w:x 0))
+  (idx-m2dotm1 :w:x :input:x :output:x) ())
+
+
+#? (==> <linear-module> bprop <input> <output>)
+;; Multiplies the <dx> slot of <output> by the transpose
+;; the weight matrix of  <linear-module>, and writes the 
+;; result into the <dx> slot of <input>.
+(defmethod linear-module bprop (input output)
+  (idx-m2dotm1 (transpose :w:x) :output:dx :input:dx)
+  (idx-m1extm1 :output:dx :input:x :w:dx) ())
+
+#? (==> <linear-module> randomize <k>)
+;; initializes the weights to random values.
+;; drawn in the interval [-k/z, +k/z] where z
+;; is the square root of the number of inputs.
+;; This must be called before starting the training
+;; of multilayer systems that contain linear modules.
+(defmethod linear-module randomize (k)
+  (let* ((fanin (idx-dim :w:x 1))
+	 (z (/ k (sqrt fanin))))
+    (idx-bloop ((x :w:x)) (idx-bloop ((x x)) (x (rand (- z) z))))) ())
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * bias-module
+;; A module that adds a bias vector to a state 
+(defclass bias-module object 
+  bias					; biases (a state object)
+  )
+
+#? (new bias-module <p> [<d0> ...<dp>])
+;; Create a new <bias-module>.
+;; <p> is the parameter object, the remaining arguments
+;; are the dimensions of the module
+(defmethod bias-module bias-module (p . l)
+  (setq bias (alloc-state p l)))
+
+#? (==> bias-module fprop <input> <output>)
+;; Add a bias vector to state <input>, 
+;; and writes the result in <output>.
+(defmethod bias-module fprop (input output)
+  (==> output resize (idx-dim :bias:x 0))
+  (idx-add :input:x :bias:x :output:x) ())
+
+#? (==> bias-module bprop <input> <output>)
+;; Backpropagates gradients through <bias-module>.
+(defmethod bias-module bprop (input output)
+  (idx-copy :output:dx :bias:dx)
+  (idx-copy :output:dx :input:dx) ())
+
+(defmethod bias-module randomize (k)
+  (idx-clear :bias:x))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * tanh-module
+;; A module that applies a hyperbolic tangent
+;; sigmoid function to each component.
+(defclass tanh-module object)
+
+#? (==> tanh-module fprop <input> <output>)
+;; passes input through a tanh sigmoid function,
+;; and writes the result in <output>.
+(defmethod tanh-module fprop (input output)
+  (==> output resize (idx-dim :input:x 0))
+  (idx-tanh :input:x :output:x) ())
+
+#? (==> tanh-module bprop <input> <output>)
+;; Backpropagates gradients through <tanh-module>.
+(defmethod tanh-module bprop (input output)
+  (idx-dtanh :input:x :input:dx)
+  (idx-mul :input:dx :output:dx :input:dx) 
+  ())
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * layered
+;; a generic layered architecture containing
+;; a variable number of layers of any type
+(defclass layered object 
+  layerin
+  states
+  layers
+  )
+
+#? (new layered <p> <l0> <s1> <l1> ... <sn> <ln>)
+;; creates an instance of a layered architecture
+;; where the modules are <l0>, <l1>...<ln>, and
+;; the internal states are <s1>...<sn>.
+(defmethod layered layered args
+  (setq layerin (car args))
+  (when (> (length args) 1)
+    (let ((n (/ (- (length args) 1) 2))
+	  (i 0))
+      (setq layers (atom-matrix n))
+      (setq states (atom-matrix n))
+      (setq args (cdr args))
+      (while args
+	(states i (car args))
+	(layers i (cadr args))
+	(incr i) (setq args (cddr args))))))
+
+#? (==> <layered> fprop <input> <output>)
+;; performs an fprop through the layered architecture
+(defmethod layered fprop (input output)
+  (if (not layers)
+      (==> layerin fprop input output)
+    ;; else multiple layers: fprop them all in sequence
+    (==> layerin fprop input (states 0))
+    (let ((n (idx-dim layers 0)))
+      (for (i 0 (- n 2) 1)
+	   (==> (layers i) fprop (states i) (states (+ i 1))))
+      (==> (layers (- n 1)) fprop (states (- n 1)) output))))
+
+#? (==> <layered> bprop <input> <output>)
+;; performs a bprop through the layered architecture
+(defmethod layered bprop (input output)
+  (if (not layers)
+      (==> layerin bprop input output)
+    ;; else multiple layers: fprop them all in sequence
+    (let ((n (idx-dim layers 0)))
+      (==> (layers (- n 1)) bprop (states (- n 1)) output)
+      (for (i (- n 2) 0  -1)
+	   (==> (layers i) bprop (states i) (states (+ i 1)))))
+    (==> layerin bprop input (states 0))))
+
+#? (==> <layered> randomize <k>
+;; loop over all the modules in <layered>
+;; and call the <randomize> method with parameter <k>
+;; on those modules that do have a <randomize> method.
+(defmethod layered randomize (k)
+  (when (check==> (classof layerin) 'randomize)
+    (==> layerin randomize k))
+  (if layers 
+      (idx-bloop ((l layers))
+	(when (check==> (classof (l)) 'randomize)
+	  (==> (l) randomize k)))))
+

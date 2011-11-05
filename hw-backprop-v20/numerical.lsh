@@ -1,0 +1,134 @@
+
+(libload "libidx/idx-macros")
+(libload "libidx/idx-double")
+
+#? ** Low-Level Numerical Functions
+;; This a set of low-level compiled functions
+;; to compute such things as the hyperbolic tangent 
+;; sigmoid function and its derivative, and apply it 
+;; to the components of vectors and matrices.
+
+#? (dtanh <x>)
+;; derivative of hyperbolic tangent
+(de dtanh (x) ((-double-) x) 
+    (let* ((e (exp (* -2 x))) (e1 (+ 1 e))) (/ (* 4 e) (* e1 e1))))
+
+#? (log2 <x>)
+;; log base 2 of <x>.
+(de log2 (x) ((-double-) x) (* 1.4426950408889634 (log x)))
+ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? (idx0-tanh <in> <out>)
+;; Apply tanh to idx0 <in> and
+;; write result into idx0 <out>.
+(de idx0-tanh (in out) 
+  ((-idx0- (-double-)) in out) 
+  (out (tanh (in))))
+
+#? (idx1-tanh <in> <out>)
+;; Apply tanh to idx1 <in> and
+;; write result into idx1 <out>.
+(de idx1-tanh (in out) 
+  ((-idx1- (-double-)) in out) 
+  (idx-bloop ((i in) (o out)) (o (tanh (i)))))
+
+#? (idx2-tanh <in> <out>)
+;; Apply tanh to idx2 <in> and
+;; write result into idx2 <out>.
+(de idx2-tanh (in out) 
+  ((-idx2- (-double-)) in out) 
+  (idx-bloop ((in in) (out out))
+    (idx-bloop ((i in) (o out)) (o (tanh (i))))))
+
+#? (idx3-tanh <in> <out>)
+;; Apply tanh to idx3 <in> and
+;; write result into idx3 <out>.
+(de idx3-tanh (in out) 
+  ((-idx3- (-double-)) in out) 
+  (idx-bloop ((in in) (out out)) (idx2-tanh in out)))
+
+#? (idx-tanh <in> <out>)
+;; Apply tanh to an idx <in> and
+;; write result into an idx <out>.
+;; This works for idx's of any number
+;; of dimension.
+(de idx-tanh (in out)
+  (selectq (idx-ndim in)
+    (0 (idx0-tanh in out))
+    (1 (idx1-tanh in out))
+    (2 (idx1-tanh in out))
+    (3 (idx1-tanh in out))
+    (t (idx-bloop ((in in) (out out)) (idx-tanh in out)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? (idx0-dtanh <in> <out>)
+;; Apply the derivative of tanh to idx0 
+;; <in> and write result into idx0 <out>.
+(de idx0-dtanh (in out) 
+  ((-idx0- (-double-)) in out) 
+  (out (dtanh (in))))
+
+#? (idx1-dtanh <in> <out>)
+;; Apply the derivative of tanh to idx1 
+;; <in> and write result into idx1 <out>.
+(de idx1-dtanh (in out) 
+  ((-idx1- (-double-)) in out) 
+  (idx-bloop ((i in) (o out)) (o (dtanh (i)))))
+
+#? (idx2-dtanh <in> <out>)
+;; Apply the derivative of tanh to idx2 
+;; <in> and write result into idx2 <out>.
+(de idx2-dtanh (in out) 
+  ((-idx2- (-double-)) in out) 
+  (idx-bloop ((in in) (out out))
+    (idx-bloop ((i in) (o out)) (o (dtanh (i))))))
+
+#? (idx3-dtanh <in> <out>)
+;; Apply the derivative of tanh to idx3 
+;; <in> and write result into idx3 <out>.
+(de idx3-dtanh (in out) 
+  ((-idx3- (-double-)) in out) 
+  (idx-bloop ((in in) (out out)) (idx2-dtanh in out)))
+
+
+#? (idx-dtanh <in> <out>)
+;; Apply the derivative of tanh to idx
+;; <in> and write result into idx <out>.
+(de idx-dtanh (in out)
+  (selectq (idx-ndim in)
+    (0 (idx0-dtanh in out))
+    (1 (idx1-dtanh in out))
+    (2 (idx1-dtanh in out))
+    (3 (idx1-dtanh in out))
+    (t (idx-bloop ((in in) (out out)) (idx-dtanh in out)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(de idx-d1decayl1 (x decay deltax)
+  ((-idx1- (-double-)) x)
+  ((-double-) decay)
+  ((-idx1- (-double-)) deltax)
+  (cidx-bloop ("i" ("x" x) ("deltax" deltax))
+	      #{ *deltax = (*x < 0.0) ? -$decay : $decay; #})
+  ())
+
+(de idx-d1indexmin-other (m z)
+  ((-idx1- (-double-)) m)
+  ((-int-) z)
+  (let ((n 0)
+        (v (m 0)) )
+    ((-int-) n)
+    ((-double-) v)
+    (cidx-bloop  ("i" ("mp" m))
+      (cinline "if (((*mp)<(%s))&&(i != $z)) { %s = *mp; %s = i; }" v v n) )
+    n ) )
+  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(dhc-make () dtanh log2
+	  idx0-tanh idx1-tanh idx2-tanh idx3-tanh
+	  idx0-dtanh idx1-dtanh idx2-dtanh idx3-dtanh
+	  idx-d1decayl1
+	  ;; idx-d1indexmin-other
+	  )

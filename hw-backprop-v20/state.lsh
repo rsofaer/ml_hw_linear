@@ -1,0 +1,127 @@
+(libload "libidx/idx-macros")
+(libload "libidx/idx-double")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? * state
+;; a <state> is a class that carries variables between
+;; trainable modules. States can be scalars, vectors,
+;; matrices, tensors of any dimension, or any other
+;; type of objects. A state contains a slot <x> to contain
+;; the actual state, and a slot <dx> to contain the
+;; partial derivatives of the loss function with respect
+;; to the state variables.
+(defclass state object x dx)
+
+#? (new state [<n1> [<n2 [<n3> ...]]])
+;; create a new state. The arguments
+;; are the dimensions (up to 8 dimensions).
+(defmethod state state l
+  (setq x (apply matrix l))
+  (setq dx (apply matrix l)))
+
+#? (==> <state> resize [<n1> [<n2 [<n3> ...]]])
+;; resize an existing state the the dimensions 
+;; passed as arguments.
+(defmethod state resize l
+  (idx-redim x l)
+  (idx-redim dx l))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? * parameter
+;; The parameter object contains the values of the trainable
+;; parameters of a learning machine (e.g. the weights of a neural net).
+;; These are stored in the form of a vector. 
+;; It also contains all the necessary variables that are necessary
+;; to update these parameters with a learning algorithm.
+;; This class only implements basic stochastic and batch gradient.
+;; Subclasses may implement other update algorithms (e.g. conjugate gradient).
+;; The constructor creates an "empty" parameter with zero variables in it.
+;; When modules of a learning machine are created, they can
+;; allocate their parameters inside a pre-existing parameter object
+;; using the <alloc-state> function. With this method, all the trainable
+;; parameters of a learning machine can be put together in a single vector.
+;;{<p>}
+;; Slots: 
+;;{<ul>
+;;  {<li> x: values }
+;;  {<li> dx: instantaneous gradient}
+;;  {<li> gradient: accumulated gradients (e.g. from multiple samples)}
+;;  {<li> deltax: descent vector used to update x 
+;;        (before multiplication by a learning rate)}
+;;</ul>}
+(defclass parameter object
+  x					; values
+  dx					; partial gradient
+  gradient				; total gradient
+  deltax 				; descent direction
+  )
+
+#? (new parameter)
+;; create a new empty parameter.
+(defmethod parameter parameter ()
+  (setq x (matrix 100))
+  (setq dx (matrix 100))
+  (setq gradient (matrix 100))
+  (setq deltax (matrix 100))
+  (==> this resize 0))
+
+
+#? (==> <parameter> resize <n>)
+;; Resize a parameter object to <n> elements.
+(defmethod parameter resize (n)
+  (idx-d1resize x n)
+  (idx-d1resize dx n)
+  (idx-d1resize gradient n) 
+  (idx-d1resize deltax n) 
+  ())
+
+
+#? (==> <parameter> update (<eta> <decay>))
+;; Update the parameter vector with
+;; a simple gradient descent method.
+;; The gradient must have been computed
+;; beforhand and written in the <dx>
+;; slot of the parameter.
+;; The argument is a list of two numbers.
+;; The first number is the step size <eta>,
+;; and the second number is a weight-decay 
+;; factor <decay>. Each weight is updated with the
+;; following formula:
+;; W = W - eta*(dx + decay*W)
+(defmethod parameter update (args)
+  (let ((eta (matrix))
+	(decay (matrix)))
+    (eta (- (car args))) (setq args (cdr args))
+    (decay (if args (* (eta) (car args)) 0))
+    (idx-copy dx gradient)
+    ;; (idx-dotm0 x decay deltax)
+    (idx-d1decayl1 x (decay) deltax)
+    (idx-dotm0acc gradient eta deltax)
+    (idx-add x deltax x) 
+    ()))
+
+#? (alloc-state <parameter> <dimlist>)
+;; Create a new <state> whose <x> and <dx> slot
+;; are allocated in the <x> and <dx> slots of
+;; the parameter passed as argument. The size of
+;; the parameter is increased so as to allow for
+;; the new parameters. <dimlist> is a list of dimensions
+;; for the state being allocated.
+(de alloc-state (p l)
+  (let ((s (new-empty state))
+	(o (idx-dim :p:x 0))
+	(n (apply * (cons 1 l))))
+    (==> p resize (+ o n))
+    (setq :s:x (new-index-with-offset (idx-storage :p:x) l o))
+    (setq :s:dx (new-index-with-offset (idx-storage :p:dx) l o))
+    s))
+
+#? (new-index-with-offset <sto> <l> <o>)
+;; create a new idx on storage <sto> with
+;; dimensions in list <l> and offset <o>
+;; in the storage.
+(de new-index-with-offset (sto l o)
+  (let ((m (new-index sto l))) (idx-changeoffset m o) m))
+
+

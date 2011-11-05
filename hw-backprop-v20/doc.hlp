@@ -1,0 +1,25 @@
+
+#? *** A Simple Gradient-Based Learning Library
+{<author> Yann LeCun}
+This package demonstrates how to implement a simple 
+gradient-based machine learning algorithms in Lush.
+It includes a demo script to train a simple 2-layer
+neural net on the ISOLET dataset (isolated spoken 
+letters). 
+
+#? *** << main.lsh
+
+#? *** << backprop.lsh
+
+#? *** << dataset.lsh
+
+#? *** << state.lsh
+
+#? *** << modules-base.lsh
+
+#? *** << modules.lsh
+
+#? *** << numerical.lsh
+
+
+

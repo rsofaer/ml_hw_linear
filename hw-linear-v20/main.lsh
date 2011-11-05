@@ -51,7 +51,7 @@
 (read-data)
 
 ;; set sizes of the training set and test set
-(==> data set-train-test 400 1000)
+(==> data set-train-test 200 1000)
 
 (libload "perceptron.lsh")
 (libload "linear-gradient.lsh")

@@ -1,0 +1,187 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Object-Oriented Implementation of Gradient-Based Learning
+;; Yann LeCun, 2004-2011
+;; http://yann.lecun.com
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+#? ** gradient-based learning
+;; This is a simple implementation of the concept
+;; of gradient-based learning, which provides a
+;; convenient framework in which to implement many
+;; popular machine learning algorithms. 
+
+#? ** using the library. 
+;; The process is as follows:
+;; (1) build a learning machine; (2) create a "trainer"
+;; that contains that learning machine, a loss module
+;; (which computes the loss), and a parameter object
+;; (which collects all the trainable parameters of the
+;; learning machine in a single vector); (3) train/test 
+;; using a dataset.
+;; 
+;; Only the simplest trainer and parameter update methods are
+;; predefined (supervised learning with stochastic gradient). It is a
+;; simple matter to define other trainers for different procedures
+;; (e.g. maximum a posteriori loss function with conjugate gradient).
+
+#? * creating a learning machine
+;; A learning machine can be built in a modular fashion
+;; by assembling modules. Each module is assumed to possess
+;; an "fprop" method, which computes the output state(s)
+;; from the input state(s), and a "bprop" method which computes
+;; the gradient of the loss with respect to the input
+;; state(s) given the gradient of the loss with respect
+;; to the output state(s).
+;;
+;; Creating a new type of learning machine is achieved by defining
+;; a class whose slots contain the modules and intermediate states
+;; that compose the machine. The fprop and bprop methods take the input
+;; and output state(s) as argument and call the fprop and bprop methods 
+;; of the internal modules in the appropriate order.
+;; A number of commonly-used modules are predefined.
+
+#? * handling trainable parameters
+;; The trainable parameters of a module are stored in 
+;; a state object that is a slot of the module. However,
+;; the numerical values contained in all the state 
+;; objects of all the trainable modules are collected 
+;; in a single vector in a parameter object. This allows
+;; us to implement generic update rules that are totally
+;; independent of the structure of the learning machine.
+;; This is easily implemented using Lush'es vector/matrix/tensors
+;; which allows multiple simultaneous access mechanisms for
+;; a single collection of numbers or objects.
+;; 
+;; The constructor method of each module takes
+;; a parameter object as argument and allocates its own
+;; parameters into it. A function called "alloc-state" 
+;; is provided for that purpose. It takes a parameter object
+;; as argument and allocates a new state, which can be stored
+;; in a slot of the module. 
+;; 
+;; In the end, each module appears to possess its own parameters in a
+;; state object, but the actual values and gradients are stored in
+;; sections of components of vectors in the <x> and <dx> slots of a
+;; large <parameter> object stored in the trainer. This parameter
+;; object collects all the trainable parameters of all the modules in
+;; the machine.
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#? * simple-trainer
+;; a class designed to train a supervised learning machine
+;; with a set of target vectors for each class. The loss function
+;; being minimized is the discrepancy between the ouptut produced
+;; by the machine and the target vector as measured by the
+;; loss module. The simple-trainer contains a machine, and loss
+;; module, and a parameter object.
+(defclass simple-trainer object
+  input					; the input state
+  output				; the output/label state
+  machine				; the machine
+  mout					; the output of the machine
+  loss-module				; the loss-module module
+  loss					; the value of the loss 
+  param					; the trainable parameter object
+  )
+
+#? (new simple-trainer <machine> <loss-module> <parameter>)
+;; create a new simple trainer that minimizes
+;; the average loss as measured by loss-module.
+(defmethod simple-trainer simple-trainer (m c p)
+  (setq input (new state 10))
+  (setq output (new state 10))
+  (setq machine m)
+  (setq mout (new state 10))
+  (setq loss-module c)
+  (setq loss (new state))
+  (:loss:dx 1)
+  (setq param p))
+
+#? (==> <simple-trainer> run <sample> <label-set> <losses>)
+;; take an input and a vector of possible labels (each of which
+;; is a vector, hence <label-set> is a matrix) and
+;; return the index of the label that has the smallest loss
+;; fill up the vector <losses> with the losses produced by each 
+;; possible target vector in <label-set>. The first dimension 
+;; of <label-set> must be equal to the dimension of <losses>.
+(defmethod simple-trainer run (sample label-set losses)
+  (==> input resize (idx-dim sample 0))
+  (idx-copy sample :input:x)
+  (==> machine fprop input mout)
+  (idx-bloop ((label label-set) (e losses))
+    (==> output resize (idx-dim label 0))
+    (idx-copy label :output:x)
+    (==> loss-module fprop mout output loss)
+    (e (:loss:x)))
+  ;; return label with lowest loss
+  (idx-d1indexmin losses))
+
+#? (==> <simple-trainer> test-sample <sample> <label> <label-set>)
+;; Test a single sample and its label <label> (an integer), and 
+;; return a list with the losses for the correct label and an
+;; integer which is equal to 1 if the sample was incorrectly classified
+;; and 0 if it was correctly classified.
+;; <label-set> is a matrix where the i-th row is the desired output
+;; for the i-th category. 
+(defmethod simple-trainer test-sample (sample label label-set)
+  (let* ((losses (matrix (idx-dim label-set 0)))
+	 (answer (==> this run sample label-set losses)))
+    (:loss:x (losses (label 0)))
+    (list
+     (:loss:x)
+     (if (= (label 0) answer) 0 1))))
+
+#? (==> <simple-trainer> learn-sample <sample> <label> <label-set> <update-args>)
+;; perform a learning update on one sample. <sample> is the input
+;; sample, <label> is the desired category (an integer), <label-set> is
+;; a matrix where  the i-th row is the desired output
+;; for the i-th category, and <update-args> is a list of arguments
+;; for the parameter update method (e.g. learning rate and weight decay).
+(defmethod simple-trainer learn-sample (sample label label-set update-args)
+  (==> input resize (idx-dim sample 0))
+  (idx-copy sample :input:x)		; copy sample to input object
+  (==> machine fprop input mout)	; fprop through the machine
+  (==> output resize (idx-dim label-set 1))
+  ;; copy desired label to output object
+  (idx-copy (select label-set 0 (label 0)) :output:x) 
+  (==> loss-module fprop mout output loss) ; compute loss
+  (==> loss-module bprop mout output loss)
+  (==> machine bprop input mout)
+  (==> param update update-args) 	; update parameter vector
+  (:loss:x))
+
+#? (==> <simple-trainer> test <samples> <labels> <label-set>)
+;; Measure the average loss and classification error rate
+;; on a dataset. <samples> is a matrix that contains the
+;; training samples, <labels> contains the desired categories,
+;; and <label-set> is a matrix whose rows are
+;; the desired output for each category. This
+;; returns a list with average loss and proportion of errors
+(defmethod simple-trainer test (samples labels label-set)
+  (let ((errors 0) (total-loss 0) (n (idx-dim samples 0)))
+    (idx-bloop ((sample samples) (label labels))
+      (let ((res (==> this test-sample sample label label-set)))
+	(incr total-loss (car res))
+	(incr errors (cadr res))))
+    (list (/ total-loss n) (/ errors n))))
+
+#? (==> <simple-trainer> train <samples> <labels> <label-set> <niter> <update-args>)
+;; train for <niter> sweeps over the training set. <samples> contains
+;; the inputs samples, and <labels> the corresponding desired
+;; categories <labels>.  <label-set> is a matrix whose rows are the
+;; desired output for each category.  return the average loss computed
+;; on-the-fly.  <update-args> is a list of arguments for the parameter
+;; update method (e.g. learning rate and weight decay).
+(defmethod simple-trainer train (samples labels label-set niter update-args)
+  (let ((errors 0) (total-loss 0) (n (idx-dim samples 0)))
+    (repeat niter
+      (idx-bloop ((sample samples) (label labels))
+	(incr total-loss
+	      (==> this learn-sample sample label label-set update-args))))
+    (/ total-loss n)))
+
+

@@ -1,0 +1,233 @@
+(libload "modules-base")
+(libload "modules")			; this is the file you have to modify
+(libload "dataset")
+(libload "backprop")
+
+;; directory where the data reside is ../datasets
+(defparameter datadir (concat (dirname file-being-loaded) "/../datasets"))
+
+
+#? * Script for training a neural net on the ISOLET dataset
+;; This simple script shows how to train a 2-layer neural net
+;; in the ISOLET dataset (spoken letters spoken in isolation).
+
+
+#? (example-isolet-neuralnet)
+;; This function builds and trains a 2-layer
+;; neural net on 4000 training samples from the ISOLET 
+;; dataset for 10 epochs. The test performance is measured
+;; on 1000 different test samples.
+
+#? (train-test <trainer> <tr> <te> <n> <label-set> <args>)
+;; Train the <trainer> on the training dataset <tr> for <n> 
+;; iterations, using the label set <label-set>, and 
+;; the learning parameters in list <args> (learning rate
+;; and weight decay). Measure the error rate on the test
+;; dataset <te> after each pass through the training set.
+(de train-test (trainer tr te n label-set args)
+  (for (i 1 n)
+       (==> trainer train :tr:inputs :tr:outputs label-set 1 args)
+       (printf "%5d: " (* 1 i))
+       (let ((res (==> trainer test :tr:inputs :tr:outputs label-set)))
+	 (printf "TRAIN: loss=%6.3f, error=%4.3f  " (car res) (cadr res)))
+       (let ((res (==> trainer test :te:inputs :te:outputs label-set)))
+	 (printf "TEST : loss=%6.3f, error=%4.3f  " (car res) (cadr res)))
+       (printf "\n")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#?  (make-place-code <n> <voff> <von>)
+;; make a "label-set": a matrix of target (desired) vectors 
+;; with a "place code". This returns a matrix of size <n> by <n>
+;; with <von> on the diagonal, and <voff> everywhere else.
+;; The i-th row of the matrix can be seen as a target code
+;; for the i-th category.
+(de make-place-code (n voff von)
+  (let ((m (matrix n n)))
+    (for (i 0 (- n 1))
+	 (for (j 0 (- n 1))
+	      (m i j (if (= i j) von voff))))
+    m))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(de load-isolet-data ()
+  (defparameter ncategories 26)
+  ;; create new dataset object
+  (defparameter training-set-full (new dataset))
+  (defparameter test-set-full (new dataset))
+  ;; read training data and shuffle it
+  (==> training-set-full load-matrix 
+       (concat datadir "/uci-isolet/isolet-train.mat")
+       (concat datadir "/uci-isolet/isolet-train-labels.mat")
+       t)
+  (==> test-set-full load-matrix 
+       (concat datadir "/uci-isolet/isolet-test.mat")
+       (concat datadir "/uci-isolet/isolet-test-labels.mat")
+       ()) )
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BELOW THIS POINT ARE TRAINING SCRIPTS.
+;; YOU MAY NEED TO MODIFY THESE FUNCTIONS FOR YOUR PURPOSE.
+
+
+;; train and test a single-layer neural net 
+;; (linear -> bias -> tanh) with the square 
+;; euclidean distance loss.
+(de train-isolet-1layer-mse ()
+  (load-isolet-data)
+  ;; create smaller training/test set
+  (defparameter training-set (==> training-set-full firstn 4000))
+  (defparameter test-set (==> test-set-full firstn 1000))
+  ;; create an empty parameter vector
+  (defparameter param (new parameter))
+  ;; create a linear classifier
+  (defparameter machine 
+    (new layered
+	 (new linear-module param (==> training-set nvariables) ncategories)
+	 (new state ncategories)
+	 (new bias-module param ncategories)
+	 (new state ncategories)
+	 (new tanh-module)))
+  ;; create a new cost
+  (defparameter cost (new euclidean-module))
+  ;; create a new trainer
+  (defparameter trainer (new simple-trainer machine cost param))
+  ;; create the set of possible labels. We call the function
+  ;; make-place-code defined above to create a "place code"
+  ;; with 26 categories.
+  (defparameter label-set (make-place-code ncategories -0.9 0.9))
+  ;; clear the parameters
+  (idx-clear :param:x)
+  ;; run the learning for 20 passes through the training set.
+  ;; The last two parameters in the list are the learning rate
+  ;; and the weight decay coefficient (L2 regularizer).
+  (train-test trainer training-set test-set 20 label-set (list 0.0005 0.001))
+  )
+
+;; train and test a 2-layer neural net 
+;; (linear -> bias -> tanh -> linear -> bias -> tanh) 
+;; with the square euclidean distance loss.
+(de train-isolet-2layer-mse ()
+  (load-isolet-data)
+  ;; create smaller training/test set
+  (defparameter training-set (==> training-set-full firstn 4000))
+  (defparameter test-set (==> test-set-full firstn 1000))
+  ;; create an empty parameter vector
+  (defparameter param (new parameter))
+  ;; create a 2 layer neural net with 30 hidden units
+  ;; (you must write your own neural net class)
+  (defparameter nhidden 30)
+  (defparameter machine 
+    (new layered
+	 (new linear-module param (==> training-set nvariables) nhidden)
+	 (new state nhidden)
+	 (new bias-module param nhidden)
+	 (new state nhidden)
+	 (new tanh-module)
+	 (new state nhidden)
+	 (new linear-module param nhidden ncategories)
+	 (new state ncategories)
+	 (new bias-module param ncategories)
+	 (new state ncategories)
+	 (new tanh-module)))
+  ;; create a new cost
+  (defparameter cost (new euclidean-module))
+  ;; create a new trainer
+  (defparameter trainer (new simple-trainer machine cost param))
+  ;; create the set of possible labels. We call the function
+  ;; make-place-code defined above to create a "place code"
+  ;; with 26 categories.
+  (defparameter label-set (make-place-code ncategories -0.9 0.9))
+  ;; initialize weights
+  (idx-clear :param:x)
+  (==> machine randomize 2.0)
+  ;; run the learning
+  ;; The last two parameters in the list are the learning rate
+  ;; and the weight decay coefficient (L2 regularizer).
+  (train-test trainer training-set test-set 20 label-set (list 0.005 0.0001))
+  )
+
+;; train and test a single-layer neural net 
+;; (linear -> bias -> softmax) with the 
+;; cross-entropy loss.
+(de train-isolet-1layer-cross-entropy ()
+  (load-isolet-data)
+  ;; create smaller training/test set
+  (defparameter training-set (==> training-set-full firstn 4000))
+  (defparameter test-set (==> test-set-full firstn 1000))
+  ;; create an empty parameter vector
+  (defparameter param (new parameter))
+  ;; create a linear classifier
+  (defparameter machine 
+    (new layered
+	 (new linear-module param (==> training-set nvariables) ncategories)
+	 (new state ncategories)
+	 (new bias-module param ncategories)
+	 (new state ncategories)
+	 (new softmax-module 1.0)))
+  ;; create a new cost
+  (defparameter cost (new cross-entropy))
+  ;; create a new trainer
+  (defparameter trainer (new simple-trainer machine cost param))
+  ;; create the set of possible labels. We call the function
+  ;; make-place-code defined above to create a "place code"
+  ;; with 26 categories. Parameter p is the desired probability for
+  ;; the correct class. You might want to change it (from say 0.9 to 1.0).
+  (let ((p 0.95))
+    (defparameter label-set (make-place-code ncategories (/ (- 1 p) (- ncategories 1)) p)))
+  ;; clear the parameters
+  (idx-clear :param:x)
+  ;; run the learning for 20 passes through the training set.
+  ;; The last two parameters in the list are the learning rate
+  ;; and the weight decay coefficient (L2 regularizer).
+  (train-test trainer training-set test-set 20 label-set (list 0.0005 0.001))
+  )
+
+;; train and test a 2-layer neural net 
+;; (linear -> bias -> tanh -> linear -> bias -> softmax) 
+;; with the cross-entropy loss.
+(de train-isolet-2layer-cross-entropy ()
+  (load-isolet-data)
+  ;; create smaller training/test set
+  (defparameter training-set (==> training-set-full firstn 4000))
+  (defparameter test-set (==> test-set-full firstn 1000))
+  ;; create an empty parameter vector
+  (defparameter param (new parameter))
+  ;; create a 2 layer neural net with 30 hidden units
+  ;; (you must write your own neural net class)
+  (defparameter nhidden 30)
+  (defparameter machine 
+    (new layered
+	 (new linear-module param (==> training-set nvariables) nhidden)
+	 (new state nhidden)
+	 (new bias-module param nhidden)
+	 (new state nhidden)
+	 (new tanh-module)
+	 (new state nhidden)
+	 (new linear-module param nhidden ncategories)
+	 (new state ncategories)
+	 (new bias-module param ncategories)
+	 (new state ncategories)
+	 (new softmax-module)))
+  ;; create a new cost
+  (defparameter cost (new cross-entropy))
+  ;; create a new trainer
+  (defparameter trainer (new simple-trainer machine cost param))
+  ;; create the set of possible labels. We call the function
+  ;; make-place-code defined above to create a "place code"
+  ;; with 26 categories. Parameter p is the desired probability for
+  ;; the correct class. You might want to change it (from say 0.9 to 1.0).
+  (let ((p 0.95))
+    (defparameter label-set (make-place-code ncategories (/ (- 1 p) (- ncategories 1)) p)))
+  ;; initialize weights
+  (idx-clear :param:x)
+  (==> machine randomize 2.0)
+  ;; run the learning
+  ;; The last two parameters in the list are the learning rate
+  ;; and the weight decay coefficient (L2 regularizer).
+  (train-test trainer training-set test-set 20 label-set (list 0.005 0.0001))
+  )
+
+
+(printf "type (train-isolet-2layer-mse)\n")

@@ -44,10 +44,11 @@
       -1))
 
 (defmethod learner error (input-matrix output-vector)
- (let ((sum 0))
+ (let ((errors 0))
     (idx-bloop ((row input-matrix) (output output-vector))
-      (setq sum (+ sum (abs (- (output) (==> this threshold-f row))))))
-     (/ sum (idx-dim input-matrix 0))))
+      (if (<> (output) (==> this threshold-f row))
+        (setq errors (+ errors 1))))
+     (/ errors (idx-dim output-vector 0))))
 
 (defmethod learner loss (input-matrix output-vector)
   (let ((sum 0))
@@ -55,7 +56,7 @@
       (setq sum (+ sum (==> this per-sample-loss row output))))
      (+ 
         (/ sum (idx-dim output-vector 0))
-        ((==> this l1-regularizer))
+        ;((==> this l1-regularizer))
         ((==> this l2-regularizer)))
         ))
 
@@ -83,7 +84,7 @@
 (defmethod learner iterate-weights-for-row (row output step-size)
   (let* ((weight-increment (idx-dotm0 (==> this gradient row output) step-size)))
     (==> this l2-weight-decay step-size)
-    (==> this l1-weight-decay step-size)
+    ;(==> this l1-weight-decay step-size)
     (setq weights (idx-add weights weight-increment))
     (==> this converged? weight-increment)))
 
